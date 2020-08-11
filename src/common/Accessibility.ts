@@ -96,15 +96,16 @@ export interface SerializedAXNode {
  */
 export interface SnapshotOptions {
   /**
-   * Prune unintersting nodes from the tree.
+   * Prune uninteresting nodes from the tree.
    * @defaultValue true
    */
   interestingOnly?: boolean;
   /**
-   * Prune unintersting nodes from the tree.
+   * Root node to get the accessibility tree for
    * @defaultValue The root node of the entire page.
    */
   root?: ElementHandle;
+  includeBackendDOMNodeId?: boolean;
 }
 
 /**
@@ -244,12 +245,14 @@ class AXNode {
   private _hidden = false;
   private _name: string;
   private _role: string;
+  private _ignored: boolean;
   private _cachedHasFocusableChild?: boolean;
 
   constructor(payload: Protocol.Accessibility.AXNode) {
     this.payload = payload;
     this._name = this.payload.name ? this.payload.name.value : '';
     this._role = this.payload.role ? this.payload.role.value : 'Unknown';
+    this._ignored = this.payload.ignored;
 
     for (const property of this.payload.properties || []) {
       if (property.name === 'editable') {
@@ -264,11 +267,7 @@ class AXNode {
   private _isPlainTextField(): boolean {
     if (this._richlyEditable) return false;
     if (this._editable) return true;
-    return (
-      this._role === 'textbox' ||
-      this._role === 'ComboBox' ||
-      this._role === 'searchbox'
-    );
+    return this._role === 'textbox' || this._role === 'searchbox';
   }
 
   private _isTextOnlyObject(): boolean {
@@ -354,6 +353,7 @@ class AXNode {
       case 'tab':
       case 'textbox':
       case 'tree':
+      case 'treeitem':
         return true;
       default:
         return false;
@@ -363,6 +363,7 @@ class AXNode {
   public isInteresting(insideControl: boolean): boolean {
     const role = this._role;
     if (role === 'Ignored' || this._hidden) return false;
+    if (this._ignored) return false;
 
     if (this._focusable || this._richlyEditable) return true;
 
